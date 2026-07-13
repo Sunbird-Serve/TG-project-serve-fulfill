@@ -28,6 +28,7 @@ import reactor.core.publisher.Mono;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 
 
@@ -40,7 +41,6 @@ import java.util.Map;
 
 
 @RestController
-@CrossOrigin(origins = {"http://localhost:3000", "https://serve-v1.evean.net"}, allowCredentials = "true")
 public class NominationController {
 
     private final NominationService nominationService;
@@ -58,6 +58,7 @@ public class NominationController {
             @ApiResponse(responseCode = "500", description = "Server Error")}
     )
     @PostMapping("/nomination/{needId}/nominate/{nominatedUserId}")
+    @PreAuthorize("hasAnyRole('sAdmin', 'vAdmin', 'vCoordinator', 'Volunteer')")
     public ResponseEntity<Nomination> nominateNeed( @PathVariable String needId,
             @PathVariable String nominatedUserId,
             @RequestHeader Map<String, String> headers) {
@@ -67,7 +68,7 @@ public class NominationController {
         request.setNominatedUserId(nominatedUserId);
         request.setComments("");
         request.setStatus(NominationStatus.Nominated);
-        Nomination response = nominationService.nominateNeed(request);
+        Nomination response = nominationService.nominateNeed(request, headers);
 
         nominationService.fetchNCoordinatorEmail(needId,nominatedUserId);
         nominationService.fetchNominatedUserEmail(nominatedUserId);
@@ -85,12 +86,14 @@ public class NominationController {
             @ApiResponse(responseCode = "500", description = "Server Error")}
     )
     @PostMapping("/nomination/nominate/{nominatedUserId}/confirm/{nominationId}")
+    @PreAuthorize("hasAnyRole('sAdmin', 'nAdmin', 'nCoordinator', 'vAdmin', 'vCoordinator')")
     public ResponseEntity<Nomination> updateNomination( @PathVariable String nominatedUserId,
             @PathVariable String nominationId,
             @RequestParam(required = true) NominationStatus status,
+            @RequestParam(required = false) String comments,
             @RequestHeader Map<String, String> headers) throws MessagingException {
 
-        Nomination nominations = nominationService.updateNomination(nominatedUserId,nominationId,status, headers);
+        Nomination nominations = nominationService.updateNomination(nominatedUserId, nominationId, status, comments, headers);
         nominationService.sendEmailToVolunteerAsync(nominatedUserId, status, nominations.getNeedId());
 
         return ResponseEntity.ok(nominations);

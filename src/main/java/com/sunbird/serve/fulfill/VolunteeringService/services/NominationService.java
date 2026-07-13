@@ -90,18 +90,18 @@ public class NominationService {
         this.restTemplate.getMessageConverters().add(new MappingJackson2HttpMessageConverter());
     }
 
-    public Nomination nominateNeed(NominationRequest nominationRequest) {
+    public Nomination nominateNeed(NominationRequest nominationRequest, Map<String, String> headers) {
         try {
             // Convert NominationRequest to Nomination entity
             Nomination nomination = NominationMapper.mapToEntity(nominationRequest);
-            Map<String, String> headers = new HashMap<>(); 
             String status = nominationRequest.getStatus().toString();
             String apiNeedUrl = String.format("%s/api/v1/serve-need/need/status/%s?status=%s", serveNeedUrl, nomination.getNeedId(), status);
-            ResponseEntity<Need> responseEntity = webClient.put()
+            webClient.put()
                     .uri(apiNeedUrl)
                     .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                     .headers(httpHeaders -> headers.forEach(httpHeaders::set))
-                    .exchangeToMono(response -> response.toEntity(Need.class))
+                    .retrieve()
+                    .toBodilessEntity()
                     .block();
             // Save the entity
             return nominationRepository.save(nomination);
@@ -121,11 +121,14 @@ public class NominationService {
     }
 
     // Update nomination as confirm or reject
-    public Nomination updateNomination(String userId, String nominationId, NominationStatus status, Map<String, String> headers) {
+    public Nomination updateNomination(String userId, String nominationId, NominationStatus status, String comments, Map<String, String> headers) {
         Nomination nomination = nominationRepository.findById(UUID.fromString(nominationId)).get();
         //Need need = needRepository.findById(UUID.fromString(nomination.getNeedId())).get();
         UserStatusRequest userStatusRequest = new UserStatusRequest();
             nomination.setNominationStatus(status);
+            if (comments != null && !comments.trim().isEmpty()) {
+                nomination.setComments(comments);
+            }
             List<Nomination> nominationList = getAllNominations(nomination.getNeedId(), headers);
         String needStatus = "";
 
@@ -165,11 +168,12 @@ public class NominationService {
     }
 
         String apiNeedUrl = String.format("%s/api/v1/serve-need/need/status/%s?status=%s", serveNeedUrl, nomination.getNeedId(),needStatus);
-        ResponseEntity<Need> responseEntity = webClient.put()
+        webClient.put()
                     .uri(apiNeedUrl)
                     .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                     .headers(httpHeaders -> headers.forEach(httpHeaders::set))
-                    .exchangeToMono(response -> response.toEntity(Need.class))
+                    .retrieve()
+                    .toBodilessEntity()
                     .block();
 
         if (status.equals(NominationStatus.Approved)){
